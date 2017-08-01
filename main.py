@@ -54,9 +54,20 @@ def layers(vgg_layer3_out, vgg_layer4_out, vgg_layer7_out, num_classes):
     :return: The Tensor for the last layer of output
     """
     # TODO: Implement function
-    
+    # Replace fully connected output of vgg with 1x1 convolution layer
+    conv_out = tf.layers.conv2d(vgg_layer7_out, num_classes, 1, strides=(1,1))
+    # Upsample output of 1x1 conv output of encoder
+    deconv_1 = tf.layers.conv2d_transpose(conv_out, num_classes, 4, strides=(2,2))
+    # Upsample previous layer and add skip connections from earlier network layer
+    skip_1 = tf.layers.conv2d(vgg_layer4_out, num_classes, 1, strides=(1,1))
+    skip_conn_1 = tf.add(deconv_1, skip_1)
+    deconv_2 = tf.layers.conv2d_transpose(skip_conn_1, num_classes, 4, strides=(2,2))
+    # Upsample previous layer and add skip connections from earlier network layer
+    skip_2 = tf.layers.conv2d(vgg_layer3_out, num_classes, 1, strides=(1,1))
+    skip_conn_2 = tf.add(deconv_2, skip_2)
+    deconv_3 = tf.layers.conv2d_transpose(skip_conn_2, num_classes, 16, strides=(8,8))
 
-    return None #output
+    return deconv_3
 tests.test_layers(layers)
 
 
