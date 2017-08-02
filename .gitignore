@@ -1,7 +1,6 @@
-# Images and models
+# Data and models
 data/
 checkpoints/
-runs/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
