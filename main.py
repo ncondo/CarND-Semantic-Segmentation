@@ -55,17 +55,23 @@ def layers(vgg_layer3_out, vgg_layer4_out, vgg_layer7_out, num_classes):
     """
     # TODO: Implement function
     # Replace fully connected output of vgg with 1x1 convolution layer
-    conv_out = tf.layers.conv2d(vgg_layer7_out, num_classes, 1, strides=(1,1))
+    conv_out = tf.layers.conv2d(vgg_layer7_out, num_classes, 1, 1,
+                                kernel_initializer=tf.truncated_normal_initializer(stddev=0.01))
     # Upsample output of 1x1 conv output of encoder
-    deconv_1 = tf.layers.conv2d_transpose(conv_out, num_classes, 4, strides=(2,2))
+    deconv_1 = tf.layers.conv2d_transpose(conv_out, num_classes, 4, 2, 'SAME',
+                                          kernel_initializer=tf.truncated_normal_initializer(stddev=0.01))
     # Upsample previous layer and add skip connections from earlier network layer
-    skip_1 = tf.layers.conv2d(vgg_layer4_out, num_classes, 1, strides=(1,1))
+    skip_1 = tf.layers.conv2d(vgg_layer4_out, num_classes, 1, 1,
+                              kernel_initializer=tf.truncated_normal_initializer(stddev=0.01))
     skip_conn_1 = tf.add(deconv_1, skip_1)
-    deconv_2 = tf.layers.conv2d_transpose(skip_conn_1, num_classes, 4, strides=(2,2))
+    deconv_2 = tf.layers.conv2d_transpose(skip_conn_1, num_classes, 4, 2, 'SAME',
+                                          kernel_initializer=tf.truncated_normal_initializer(stddev=0.01))
     # Upsample previous layer and add skip connections from earlier network layer
-    skip_2 = tf.layers.conv2d(vgg_layer3_out, num_classes, 1, strides=(1,1))
+    skip_2 = tf.layers.conv2d(vgg_layer3_out, num_classes, 1, 1,
+                              kernel_initializer=tf.truncated_normal_initializer(stddev=0.01))
     skip_conn_2 = tf.add(deconv_2, skip_2)
-    deconv_3 = tf.layers.conv2d_transpose(skip_conn_2, num_classes, 16, strides=(8,8))
+    deconv_3 = tf.layers.conv2d_transpose(skip_conn_2, num_classes, 16, 8, 'SAME',
+                              kernel_initializer=tf.truncated_normal_initializer(stddev=0.01))
 
     return deconv_3
 tests.test_layers(layers)
@@ -109,7 +115,15 @@ def train_nn(sess, epochs, batch_size, get_batches_fn, train_op, cross_entropy_l
     :param learning_rate: TF Placeholder for learning rate
     """
     # TODO: Implement function
-    pass
+    for epoch in range(epochs):
+        for image, label in get_batches_fn(batch_size):
+            _, loss = sess.run([train_op, cross_entropy_loss],
+                                feed_dict={input_image: image,
+                                           correct_label: label,
+                                           keep_prob: 0.75,
+                                           learning_rate: 0.0001})
+
+        print("Epoch {}/{}...".format(epoch, epochs), "Training loss: {:.4f}...".format(loss))
 tests.test_train_nn(train_nn)
 
 
@@ -119,6 +133,8 @@ def run():
     data_dir = './data'
     runs_dir = './runs'
     tests.test_for_kitti_dataset(data_dir)
+    batch_size = 16
+    epochs = 15
 
     # Download pretrained vgg model
     helper.maybe_download_pretrained_vgg(data_dir)
@@ -137,11 +153,24 @@ def run():
         #  https://datascience.stackexchange.com/questions/5224/how-to-prepare-augment-images-for-neural-network
 
         # TODO: Build NN using load_vgg, layers, and optimize function
+        image_input, keep_prob, layer3_out, layer4_out, layer7_out = load_vgg(sess, vgg_path)
+        nn_last_layer = layers(layer3_out, layer4_out, layer7_out, num_classes)
+        correct_label = tf.placeholder(dtype=tf.float32, shape=(None, None, None, num_classes))
+        learning_rate = tf.placeholder(dtype=tf.float32)
+        logits, train_op, cross_entropy_loss = optimize(nn_last_layer, correct_label, learning_rate, num_classes)
 
         # TODO: Train NN using the train_nn function
+        sess.run(tf.global_variables_initializer())
+        train_nn(sess, epochs, batch_size, get_batches_fn, train_op, cross_entropy_loss,
+                 image_input, correct_label, keep_prob, learning_rate)
 
         # TODO: Save inference data using helper.save_inference_samples
         #  helper.save_inference_samples(runs_dir, data_dir, sess, image_shape, logits, keep_prob, input_image)
+        saver = tf.train.Saver()
+        saver.save(sess, 'checkpoints/model1.ckpt')
+        saver.export_meta_graph('checkpoints/model1.meta')
+        tf.train.write_graph(sess.graph_def, './checkpoints/', 'model1.pb', False)
+        helper.save_inference_samples(runs_dir, data_dir, sess, image_shape, logits, keep_prob, image_input)
 
         # OPTIONAL: Apply the trained model to a video
 
